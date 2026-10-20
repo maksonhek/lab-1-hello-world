@@ -80,14 +80,11 @@ void read_farmer_name(char *name, int size) {
     while (1) {
         printf("Введите имя фермера (до %d символов): ", size - 1);
         fgets(name, size, stdin);
-
         name[strcspn(name, "\n")] = '\0';
-
         if (strlen(name) == 0) {
             printf("Имя не может быть пустым. Попробуйте ещё раз.\n");
             continue;
         }
-
         return;
     }
 }
@@ -162,6 +159,64 @@ void write_diary_entry(FILE *out, const char *farmer_name, int day, int hour,
     fprintf(out, "==================================\n");
 }
 
+void parse_ini_file(void) {
+    FILE *in_file = fopen("input.txt", "r");
+    if (in_file == NULL) {
+        printf("Ошибка: не удалось открыть input.txt!\n");
+        return;
+    }
+
+    FILE *out_file = fopen("output.txt", "w"); 
+    if (out_file == NULL) {
+        printf("Ошибка: не удалось создать output.txt!\n");
+        fclose(in_file);
+        return;
+    }
+
+    char line[MAX_LINE_LEN];
+    int loaded = 0;  
+    int skipped = 0; 
+
+    while (fgets(line, sizeof(line), in_file) != NULL) {
+        line[strcspn(line, "\n")] = '\0';
+
+        if (strlen(line) == 0 || line[0] == '#') {
+            skipped++;
+            continue;
+        }
+
+        char *equals_pos = strchr(line, '=');
+        if (equals_pos == NULL) {
+            skipped++; 
+            continue;
+        }
+
+        *equals_pos = '\0'; 
+        char *key = line;
+        char *value = equals_pos + 1; 
+
+        if (strlen(key) == 0 || strlen(value) == 0) {
+            skipped++;
+            continue;
+        }
+
+        loaded++;
+        fprintf(stdout, "Параметр: [%s] | Значение: [%s]\n", key, value);
+        fprintf(out_file, "Параметр: [%s] | Значение: [%s]\n", key, value);
+    }
+
+    fprintf(stdout, "\nУспешно считано настроек: %d\n", loaded);
+    fprintf(stdout, "Отброшено строк: %d\n", skipped);
+    
+    fprintf(out_file, "\nУспешно считано настроек: %d\n", loaded);
+    fprintf(out_file, "Отброшено строк: %d\n", skipped);
+
+    fclose(in_file);
+    fclose(out_file);
+    
+    printf("\nРезультат также сохранен в output.txt\n");
+}
+
 int main(void) {
     int current_day  = START_DAY;
     int current_hour = START_HOUR;
@@ -197,9 +252,10 @@ int main(void) {
         printf("[6] Быстрый доступ\n");
         printf("[7] Поиск предмета по названию\n");
         printf("[8] Записать состояние в дневник\n");
+        printf("[9] Расшифровать старые записи (настройки)\n");
         printf("==================================\n");
 
-        choice = read_int("Ваш выбор: ", 0, 7);
+        choice = read_int("Ваш выбор: ", 0, 9);
 
         switch (choice) {
         case 0:
@@ -235,9 +291,8 @@ int main(void) {
                 int id   = read_int("Введите ID предмета (0-9): ", MIN_ID, MAX_ID);
 
                 inventory[slot] = id;
-                // Вот здесь была ошибка со скобкой и точкой с запятой:
                 printf("В слот %d положили [%d] - %s.\n", slot, id, item_names[id]);
-                break; // Обязательно выходим из case 4!
+                break;
             }
 
             case 5: {
@@ -299,7 +354,7 @@ int main(void) {
                                   inventory, INVENTORY_SIZE, item_names);
                                   
                 FILE *file = fopen("diary.txt", "a");
-                
+               
                 if (file == NULL) {
                     printf("Ошибка: не удалось открыть файл diary.txt для записи!\n");
                 } else {
@@ -311,6 +366,9 @@ int main(void) {
                 }
                 break;
             }
+             case 9:
+                parse_ini_file();
+                break;
         }
     
 
