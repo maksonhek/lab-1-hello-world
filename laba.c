@@ -271,6 +271,22 @@ void free_map(char **map, int height) {
     free(map);
 }
 
+
+void spawn_hero(char **map, int width, int height, int *hero_x, int *hero_y) {
+    while (1) {
+        // Ищем только внутри стен (от 1 до width-2)
+        int x = rand() % (width - 2) + 1;
+        int y = rand() % (height - 2) + 1;
+        
+        if (map[y][x] == '.') { // Если клетка свободна
+            map[y][x] = '@';    // Ставим героя
+            *hero_x = x;        // Сохраняем координаты по указателю
+            *hero_y = y;
+            break;
+        }
+    }
+}
+
 void print_map(char **map, int width, int height) {
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
@@ -278,6 +294,71 @@ void print_map(char **map, int width, int height) {
         }
         printf("\n");
     }
+}
+
+void move_hero(char **map, int width, int height, int *hero_x, int *hero_y, char dir) {
+    int new_x = *hero_x;
+    int new_y = *hero_y;
+
+    // Вычисляем новые координаты
+    if (dir == 'W' || dir == 'w') new_y--;
+    else if (dir == 'S' || dir == 's') new_y++;
+    else if (dir == 'A' || dir == 'a') new_x--;
+    else if (dir == 'D' || dir == 'd') new_x++;
+    else return; // Если ввели не ту букву, ничего не делаем
+
+    // Проверка на выход за границы (защита от Segfault)
+    if (new_x < 0 || new_x >= width || new_y < 0 || new_y >= height) {
+        return;
+    }
+
+    // Проверка коллизии (стены, деревья, камни)
+    if (map[new_y][new_x] == '.') {
+        map[*hero_y][*hero_x] = '.'; // Стираем героя со старого места
+        map[new_y][new_x] = '@';     // Рисуем героя на новом
+        *hero_x = new_x;             // Обновляем координаты
+        *hero_y = new_y;
+    } else {
+        printf("Туда нельзя идти! Там препятствие.\n");
+    }
+}
+
+void play_adventure(void) {
+    // 1. Генерируем случайный размер (от 5 до 30)
+    int width = rand() % (MAX_MAP_SIZE - MIN_MAP_SIZE + 1) + MIN_MAP_SIZE;
+    int height = rand() % (MAX_MAP_SIZE - MIN_MAP_SIZE + 1) + MIN_MAP_SIZE;
+
+    // 2. Создаем карту
+    char **map = create_map(width, height);
+    if (map == NULL) return;
+
+    // 3. Ставим героя
+    int hero_x, hero_y;
+    spawn_hero(map, width, height, &hero_x, &hero_y);
+
+    char dir;
+    while (1) {
+        printf("\n--- Приключение (Размер карты: %dx%d) ---\n", width, height);
+        print_map(map, width, height);
+        printf("\nДвижение (W - вверх, A - влево, S - вниз, D - вправо, Q - сбежать домой): ");
+        
+        // Читаем букву (пробел перед %c нужен, чтобы съесть Enter из буфера)
+        if (scanf(" %c", &dir) != 1) {
+            while (getchar() != '\n'); // очистка, если ввели что-то странное
+            continue;
+        }
+
+        if (dir == 'Q' || dir == 'q') {
+            printf("Вы сбежали из приключения!\n");
+            break; // Выходим из цикла
+        }
+
+        // Двигаем героя
+        move_hero(map, width, height, &hero_x, &hero_y, dir);
+    }
+
+    // 4. ОБЯЗАТЕЛЬНО ОЧИЩАЕМ ПАМЯТЬ ПЕРЕД ВЫХОДОМ!
+    free_map(map, height);
 }
 
 int main(void) {
@@ -304,23 +385,6 @@ int main(void) {
 
     int choice;
 
-    srand(time(NULL)); 
-
-    // --- ВРЕМЕННЫЙ БЛОК ДЛЯ ТЕСТА КАРТЫ ---
-    printf("Тест генерации карты:\n");
-    int test_w = 10;
-    int test_h = 8;
-    
-    char **my_map = create_map(test_w, test_h);
-    if (my_map != NULL) {
-        print_map(my_map, test_w, test_h);
-        free_map(my_map, test_h); // ОБЯЗАТЕЛЬНО ОЧИЩАЕМ!
-        printf("Память успешно очищена.\n");
-    }
-    printf("--------------------------------\n");
-    // ------------------------
-
-
     while (1) {
         printf("\n %s THE GAME\n", farmer_name);
         printf("[0] Выход\n");
@@ -333,9 +397,10 @@ int main(void) {
         printf("[7] Поиск предмета по названию\n");
         printf("[8] Записать состояние в дневник\n");
         printf("[9] Расшифровать старые записи (настройки)\n");
+        printf("[10] Путешествовать\n");
         printf("==================================\n");
 
-        choice = read_int("Ваш выбор: ", 0, 9);
+        choice = read_int("Ваш выбор: ", 0, 10);
 
         switch (choice) {
         case 0:
@@ -449,6 +514,9 @@ int main(void) {
              case 9:
                 parse_ini_file();
                 break;
+             case 10:
+                play_adventure();
+                break;   
         }
     
 
