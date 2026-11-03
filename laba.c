@@ -15,6 +15,7 @@
 #define HOURS_PER_DAY  24    
 #define MIN_MAP_SIZE 5
 #define MAX_MAP_SIZE 30
+#define FOG_RADIUS 4
 
 
 int read_int(const char *prompt, int min, int max) {
@@ -258,6 +259,14 @@ char **create_map(int width, int height) {
             }
         } // <--- Закрывает внутренний цикл for (x)
     } // <--- Закрывает внешний цикл for (y)
+	    while (1) {
+        int dx = rand() % (width - 2) + 1;
+        int dy = rand() % (height - 2) + 1;
+        if (map[dy][dx] == '.') {
+            map[dy][dx] = 'D';
+            break;
+        }
+    }
 
     return map;
 } // <--- Закрывает функцию
@@ -274,23 +283,35 @@ void free_map(char **map, int height) {
 
 void spawn_hero(char **map, int width, int height, int *hero_x, int *hero_y) {
     while (1) {
-        // Ищем только внутри стен (от 1 до width-2)
         int x = rand() % (width - 2) + 1;
         int y = rand() % (height - 2) + 1;
         
-        if (map[y][x] == '.') { // Если клетка свободна
-            map[y][x] = '@';    // Ставим героя
-            *hero_x = x;        // Сохраняем координаты по указателю
+        if (map[y][x] == '.') {
+            map[y][x] = 'U'; // Генерируем лестницу вверх
+            *hero_x = x;
             *hero_y = y;
             break;
         }
     }
 }
 
-void print_map(char **map, int width, int height) {
+void print_map(char **map, int width, int height, int hero_x, int hero_y) {
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
-            printf("%c ", map[y][x]);
+            // Вычисляем расстояние от героя до клетки
+            int dx = x - hero_x;
+            int dy = y - hero_y;
+            
+            // Если расстояние в пределах радиуса видимости
+            if (dx*dx + dy*dy <= FOG_RADIUS * FOG_RADIUS) {
+                if (x == hero_x && y == hero_y) {
+                    printf("@ "); // Рисуем героя
+                } else {
+                    printf("%c ", map[y][x]); // Рисуем карту
+                }
+            } else {
+                printf("? "); // Туман войны
+            }
         }
         printf("\n");
     }
@@ -300,23 +321,17 @@ void move_hero(char **map, int width, int height, int *hero_x, int *hero_y, char
     int new_x = *hero_x;
     int new_y = *hero_y;
 
-    // Вычисляем новые координаты
     if (dir == 'W' || dir == 'w') new_y--;
     else if (dir == 'S' || dir == 's') new_y++;
     else if (dir == 'A' || dir == 'a') new_x--;
     else if (dir == 'D' || dir == 'd') new_x++;
-    else return; // Если ввели не ту букву, ничего не делаем
+    else return;
 
-    // Проверка на выход за границы (защита от Segfault)
-    if (new_x < 0 || new_x >= width || new_y < 0 || new_y >= height) {
-        return;
-    }
+    if (new_x < 0 || new_x >= width || new_y < 0 || new_y >= height) return;
 
-    // Проверка коллизии (стены, деревья, камни)
-    if (map[new_y][new_x] == '.') {
-        map[*hero_y][*hero_x] = '.'; // Стираем героя со старого места
-        map[new_y][new_x] = '@';     // Рисуем героя на новом
-        *hero_x = new_x;             // Обновляем координаты
+    // Теперь можно ходить по '.', 'U' и 'D'
+    if (map[new_y][new_x] == '.' || map[new_y][new_x] == 'U' || map[new_y][new_x] == 'D') {
+        *hero_x = new_x;
         *hero_y = new_y;
     } else {
         printf("Туда нельзя идти! Там препятствие.\n");
@@ -324,40 +339,60 @@ void move_hero(char **map, int width, int height, int *hero_x, int *hero_y, char
 }
 
 void play_adventure(void) {
-    // 1. Генерируем случайный размер (от 5 до 30)
+    int depth = 1; // Счетчик глубины
     int width = rand() % (MAX_MAP_SIZE - MIN_MAP_SIZE + 1) + MIN_MAP_SIZE;
     int height = rand() % (MAX_MAP_SIZE - MIN_MAP_SIZE + 1) + MIN_MAP_SIZE;
 
-    // 2. Создаем карту
     char **map = create_map(width, height);
     if (map == NULL) return;
 
-    // 3. Ставим героя
     int hero_x, hero_y;
     spawn_hero(map, width, height, &hero_x, &hero_y);
 
     char dir;
     while (1) {
-        printf("\n--- Приключение (Размер карты: %dx%d) ---\n", width, height);
-        print_map(map, width, height);
-        printf("\nДвижение (W - вверх, A - влево, S - вниз, D - вправо, Q - сбежать домой): ");
+        printf("\n--- Подземелье (Глубина: %d, Размер: %dx%d) ---\n", depth, width, height);
+        print_map(map, width, height, hero_x, hero_y);
+        printf("\nДвижение (W/A/S/D), Q - выход (только на 'U'): ");
         
-        // Читаем букву (пробел перед %c нужен, чтобы съесть Enter из буфера)
         if (scanf(" %c", &dir) != 1) {
-            while (getchar() != '\n'); // очистка, если ввели что-то странное
+            while (getchar() != '\n');
             continue;
         }
 
+        // Обработка выхода
         if (dir == 'Q' || dir == 'q') {
-            printf("Вы сбежали из приключения!\n");
-            break; // Выходим из цикла
+            if (map[hero_y][hero_x] == 'U') {
+                printf("Вы благополучно сбежали на поверхность с %d этажа!\n", depth);
+                break;
+            } else {
+                printf("Выход на поверхность доступен только с лестницы 'U'!\n");
+                continue;
+            }
         }
 
         // Двигаем героя
         move_hero(map, width, height, &hero_x, &hero_y, dir);
+
+        // Проверка на спуск вниз
+        if (map[hero_y][hero_x] == 'D') {
+            printf("\nВы спустились на следующий этаж!\n");
+            // Удаляем старую карту
+            free_map(map, height);
+            depth++;
+
+            // Генерируем новую карту
+            width = rand() % (MAX_MAP_SIZE - MIN_MAP_SIZE + 1) + MIN_MAP_SIZE;
+            height = rand() % (MAX_MAP_SIZE - MIN_MAP_SIZE + 1) + MIN_MAP_SIZE;
+            map = create_map(width, height);
+            if (map == NULL) return;
+            
+            // Спавним героя на новой карте
+            spawn_hero(map, width, height, &hero_x, &hero_y);
+        }
     }
 
-    // 4. ОБЯЗАТЕЛЬНО ОЧИЩАЕМ ПАМЯТЬ ПЕРЕД ВЫХОДОМ!
+    // Очистка памяти при выходе
     free_map(map, height);
 }
 
