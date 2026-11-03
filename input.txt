@@ -1,0 +1,8 @@
+difficulty=hard
+
+rain_chance=40
+# Еще один комментарий
+season=spring
+broken_line_without_equals
+=empty_key
+empty_value=
